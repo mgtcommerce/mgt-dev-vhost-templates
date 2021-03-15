@@ -1,19 +1,10 @@
 server {
-  listen 80;
-  listen [::]:80;
-  listen 443 ssl http2;
-  listen [::]:443 ssl http2;
+  listen 8080;
+  listen [::]:8080;
   {{ssl_certificate_key}}
   {{ssl_certificate}}
   {{server_name}}
   {{root}}
-
-  {{nginx_access_log}}
-  {{nginx_error_log}}
-
-  if ($scheme != "https") {
-    rewrite ^ https://$host$uri permanent;
-  }
 
   location /static/ {
     location ~ ^/static/version {
@@ -47,7 +38,7 @@ server {
     try_files $uri =404;
     fastcgi_read_timeout 3600;
     fastcgi_send_timeout 3600;
-    fastcgi_param HTTPS $fastcgi_https;
+    fastcgi_param HTTPS "on";
     #fastcgi_param MAGE_RUN_CODE "store_code";
     #fastcgi_param MAGE_RUN_TYPE "website";
     {{php_fpm_listener}}
@@ -62,5 +53,80 @@ server {
 
   if (-f $request_filename) {
     break;
+  }
+}
+
+server {
+  listen 80;
+  listen [::]:80;
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  {{ssl_certificate_key}}
+  {{ssl_certificate}}
+  {{server_name}}
+  {{root}}
+
+  {{nginx_access_log}}
+  {{nginx_error_log}}
+
+  if ($scheme != "https") {
+    rewrite ^ https://$host$uri permanent;
+  }
+
+  location /media/ {
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header Host $host;
+    proxy_set_header HTTPS "off";
+    proxy_pass http://127.0.0.1:8080;
+    proxy_hide_header Via;
+    proxy_hide_header Vary;
+    proxy_hide_header X-Server;
+    #proxy_hide_header X-Backend-Server;
+    proxy_max_temp_file_size 0;
+    proxy_connect_timeout      7200;
+    proxy_send_timeout         7200;
+    proxy_read_timeout         7200;
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+    proxy_temp_file_write_size 256k;
+  }
+
+  location / {
+    location ~ ^/static/version {
+      rewrite ^/static/(version\d*/)?(.*)$ /static/$2 last;
+    }
+    location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|html|json)$ {
+      add_header Access-Control-Allow-Origin "*";
+      expires max;
+      access_log off;
+      if (!-f $request_filename) {
+         proxy_pass http://127.0.0.1:6081;
+         #proxy_pass http://127.0.0.1:8080;
+      }
+    }
+    proxy_pass http://127.0.0.1:6081;
+    #proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #proxy_hide_header X-Varnish;
+    proxy_hide_header Via;
+    proxy_hide_header Vary;
+    proxy_hide_header X-Server;
+    proxy_hide_header X-Backend-Server;
+    proxy_hide_header X-Frame-Options;
+    proxy_redirect off;
+    proxy_max_temp_file_size 0;
+    proxy_connect_timeout      720;
+    proxy_send_timeout         720;
+    proxy_read_timeout         720;
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+    proxy_temp_file_write_size 256k;
   }
 }
