@@ -15,6 +15,8 @@ server {
     rewrite ^ https://$host$uri permanent;
   }
 
+  {{basic_auth}}
+
   try_files $uri $uri/ /index.php?$args;
   index index.php index.html;
 
